@@ -55,6 +55,8 @@ Component.prototype.isReactComponent = {};
  * @final
  * @protected
  */
+// Component 原型上挂载了 setState 方法，实际上 setState 就只是调用了 updater 的 enqueueSetState
+// updater 函数目前还不清楚有什么作用，感觉是 react-dom 调用 Component 时传入的方法, updater 才是 Component 的核心方法
 Component.prototype.setState = function(partialState, callback) {
   invariant(
     typeof partialState === 'object' ||
@@ -80,6 +82,9 @@ Component.prototype.setState = function(partialState, callback) {
  * @final
  * @protected
  */
+// 强制更新，确保不会在操作 DOM 时被调用
+// 当 state 里的某个变量层次太深，更新时没有触发 setState ，可以调用这个方法强制更新
+// 不会触发 shouldComponentUpdate，但是会触发 componentWillUpdate 和 componentDidUpdate
 Component.prototype.forceUpdate = function(callback) {
   this.updater.enqueueForceUpdate(this, callback, 'forceUpdate');
 };
@@ -121,7 +126,7 @@ if (__DEV__) {
     }
   }
 }
-
+// 通过 ComponentDummy ，让 PureComponent 继承 Component
 function ComponentDummy() {}
 ComponentDummy.prototype = Component.prototype;
 
@@ -140,6 +145,7 @@ const pureComponentPrototype = (PureComponent.prototype = new ComponentDummy());
 pureComponentPrototype.constructor = PureComponent;
 // Avoid an extra prototype jump for these methods.
 Object.assign(pureComponentPrototype, Component.prototype);
+// 以 isPureReactComponent 来区分普通的 Component
 pureComponentPrototype.isPureReactComponent = true;
 
 export {Component, PureComponent};
