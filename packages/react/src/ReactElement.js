@@ -108,12 +108,15 @@ function defineRefPropWarningGetter(props, displayName) {
  * indicating filename, line number, and/or other information.
  * @internal
  */
+// 一个工厂函数，用来创建 Reatc element 对象，通过增加 $$typeof 来区分 React element
 const ReactElement = function(type, key, ref, self, source, owner, props) {
   const element = {
     // This tag allows us to uniquely identify this as a React Element
+    // $$typeof 是用来表示节点是一个 React Element 类型
     $$typeof: REACT_ELEMENT_TYPE,
 
     // Built-in properties that belong on the element
+    // 记录节点是否是原生组件还是自定义的组件
     type: type,
     key: key,
     ref: ref,
@@ -301,6 +304,13 @@ export function jsxDEV(type, config, maybeKey, source, self) {
  * Create and return a new ReactElement of the given type.
  * See https://reactjs.org/docs/react-api.html#createelement
  */
+
+ /** 
+  * JSX 最终转化为调用 createElement
+  * type：节点类型；如果是原生的节点，那么就是一个字符串，如果是自定义的组件，那么它就是定义的component
+  * config: JSX 标签中所有的 attrs , 以 key: value 形式保存
+  * children： JSX 标签中的内容
+ */
 export function createElement(type, config, children) {
   let propName;
 
@@ -312,6 +322,7 @@ export function createElement(type, config, children) {
   let self = null;
   let source = null;
 
+  // 筛选出有效的 ref 和 key
   if (config != null) {
     if (hasValidRef(config)) {
       ref = config.ref;
@@ -323,6 +334,7 @@ export function createElement(type, config, children) {
     self = config.__self === undefined ? null : config.__self;
     source = config.__source === undefined ? null : config.__source;
     // Remaining properties are added to a new props object
+    // 过滤掉 ref、key、__self、__source 这几个特殊的 props ，实际渲染出来的 dom 中不会出现这些 props
     for (propName in config) {
       if (
         hasOwnProperty.call(config, propName) &&
@@ -335,6 +347,9 @@ export function createElement(type, config, children) {
 
   // Children can be more than one argument, and those are transferred onto
   // the newly allocated props object.
+  // 处理 children 的部分，children 可能会有多个，获取所有的 children
+  // 若只有一个 children ,props.children 就只是一个react对象
+  // 若有多个 children ，props.children 就只是一个对象数组
   const childrenLength = arguments.length - 2;
   if (childrenLength === 1) {
     props.children = children;
@@ -352,6 +367,11 @@ export function createElement(type, config, children) {
   }
 
   // Resolve default props
+  // 处理默认的 props
+  // class Comp extends React.Component
+  // Comp.defaultProps = { value: 1 }
+  // 如果对应的 props 值为 undefined ，则赋值默认值
+  // 开发时注意此处需考虑 null 的情况
   if (type && type.defaultProps) {
     const defaultProps = type.defaultProps;
     for (propName in defaultProps) {
@@ -374,6 +394,7 @@ export function createElement(type, config, children) {
       }
     }
   }
+  // 将预处理后的参数传入
   return ReactElement(
     type,
     key,

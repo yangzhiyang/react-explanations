@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+ // React 入口文件
 import ReactVersion from 'shared/ReactVersion';
 import {
   REACT_CONCURRENT_MODE_TYPE,
@@ -55,6 +56,7 @@ import {
   enableJSXTransformAPI,
 } from 'shared/ReactFeatureFlags';
 
+// 申明 React 对象，对外提供了所有 React 可调用的api
 const React = {
   Children: {
     map,
