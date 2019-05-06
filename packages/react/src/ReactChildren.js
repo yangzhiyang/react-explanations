@@ -58,7 +58,9 @@ function getPooledTraverseContext(
   mapFunction,
   mapContext,
 ) {
+  // 判断是否已存在 traverseContextPool
   if (traverseContextPool.length) {
+    // 若存在 则 pop 一个 traverseContext 对象，并将传入的参数内容挂载在这个对象上
     const traverseContext = traverseContextPool.pop();
     traverseContext.result = mapResult;
     traverseContext.keyPrefix = keyPrefix;
@@ -67,6 +69,7 @@ function getPooledTraverseContext(
     traverseContext.count = 0;
     return traverseContext;
   } else {
+    // 若不存在，则直接返回挂载了参数内容的新对象
     return {
       result: mapResult,
       keyPrefix: keyPrefix,
@@ -77,6 +80,13 @@ function getPooledTraverseContext(
   }
 }
 
+/**
+ * releaseTraverseContext 方法将传入的 traverseContext 对象的属性都清空并存入了 traverseContextPool 中
+ * 结合 getPooledTraverseContext 方法，我的理解是：若频繁操作 map 和 forEach ，每次都需创建 traverseContext
+ * 这么一个带有 result、keyPrefix 等多个属性的对象，本身遍历就是十分消耗性能的操作，重复的创建销毁 traverseContext
+ * 就更消耗性能了，所以在使用完 traverseContext 对象后，将 traverseContext 对象的属性清空，
+ * 并存到 traverseContextPool 这么一个对象池中，下次再使用时，将空的对象 pop 出来，重复使用
+ */
 function releaseTraverseContext(traverseContext) {
   traverseContext.result = null;
   traverseContext.keyPrefix = null;
@@ -96,6 +106,12 @@ function releaseTraverseContext(traverseContext) {
  * process.
  * @return {!number} The number of children in this subtree.
  */
+/**
+ * 首先判断 children 是否是可被 React 正确渲染的类型
+ * 若 children 是单个节点，则直接调用 callback
+ * 若 children 是一个数组，则循环遍历，递归调用自身，最终还是调用 callback
+ * 现在我们返回来看，传入的 callback 实际就是 mapSingleChildIntoContext 方法，我们看下 mapSingleChildIntoContext 到底做了什么
+ */
 function traverseAllChildrenImpl(
   children,
   nameSoFar,
@@ -103,14 +119,14 @@ function traverseAllChildrenImpl(
   traverseContext,
 ) {
   const type = typeof children;
-
+  
   if (type === 'undefined' || type === 'boolean') {
     // All of the above are perceived as null.
     children = null;
   }
 
   let invokeCallback = false;
-
+  // 判断 children 是否可被 React 渲染且为单个节点
   if (children === null) {
     invokeCallback = true;
   } else {
@@ -127,7 +143,7 @@ function traverseAllChildrenImpl(
         }
     }
   }
-
+  // 若 children 可被 React 渲染且为单个节点，直接调用 callback
   if (invokeCallback) {
     callback(
       traverseContext,
@@ -144,7 +160,7 @@ function traverseAllChildrenImpl(
   let subtreeCount = 0; // Count of children found in the current subtree.
   const nextNamePrefix =
     nameSoFar === '' ? SEPARATOR : nameSoFar + SUBSEPARATOR;
-
+  // 若 hildren 是一个数组，则循环遍历，递归调用 traverseAllChildrenImpl 
   if (Array.isArray(children)) {
     for (let i = 0; i < children.length; i++) {
       child = children[i];
@@ -224,11 +240,12 @@ function traverseAllChildrenImpl(
  * @param {?*} traverseContext Context for traversal.
  * @return {!number} The number of children in this subtree.
  */
-function traverseAllChildren(children, callback, traverseContext) {
+// traverseAllChildren 实际执行了 traverseAllChildrenImpl 方法
+ function traverseAllChildren(children, callback, traverseContext) {
   if (children == null) {
     return 0;
   }
-
+ 
   return traverseAllChildrenImpl(children, '', callback, traverseContext);
 }
 
@@ -284,12 +301,19 @@ function forEachChildren(children, forEachFunc, forEachContext) {
   traverseAllChildren(children, forEachSingleChild, traverseContext);
   releaseTraverseContext(traverseContext);
 }
-
+/**
+ *
+ *
+ * @param {*} bookKeeping 就是存在对象池里的 context 对象
+ * @param {*} child 遍历 children 后的单个节点
+ * @param {*} childKey 
+ */
 function mapSingleChildIntoContext(bookKeeping, child, childKey) {
   const {result, keyPrefix, func, context} = bookKeeping;
-
+  // 调用了我们遍历时传入要执行的函数
   let mappedChild = func.call(context, child, bookKeeping.count++);
   if (Array.isArray(mappedChild)) {
+    // 如果调用后的结果还是一个数组，则再递归调用 mapIntoWithKeyPrefixInternal
     mapIntoWithKeyPrefixInternal(mappedChild, result, childKey, c => c);
   } else if (mappedChild != null) {
     if (isValidElement(mappedChild)) {
@@ -304,10 +328,25 @@ function mapSingleChildIntoContext(bookKeeping, child, childKey) {
           childKey,
       );
     }
+    // 最后得到一个展开的大数组
     result.push(mappedChild);
   }
 }
 
+/**
+ * mapIntoWithKeyPrefixInternal 中做的事情与 forEachChildren 类似
+ * 先处理了下 key 字符串
+ * 然后依次调用了 getPooledTraverseContext、traverseAllChildren、releaseTraverseContext
+ * getPooledTraverseContext 其实就是将传入的参数组成了这么一个{
+      result: mapResult,
+      keyPrefix: keyPrefix,
+      func: mapFunction,
+      context: mapContext,
+      count: 0,
+    } 对象
+ * releaseTraverseContext 从字面上理解就是释放了这个 traverseContext 对象，详细理解在 releaseTraverseContext 定义处
+ * 解读完上面这两个方法，可以知道 traverseAllChildren 应该就是 React.Children 遍历方法的核心部分
+ */
 function mapIntoWithKeyPrefixInternal(children, array, prefix, func, context) {
   let escapedPrefix = '';
   if (prefix != null) {
@@ -335,6 +374,11 @@ function mapIntoWithKeyPrefixInternal(children, array, prefix, func, context) {
  * @param {function(*, int)} func The map function.
  * @param {*} context Context for mapFunction.
  * @return {object} Object containing the ordered map of results.
+ */
+/**
+ * 如果存在 children , 则调用 mapIntoWithKeyPrefixInternal 方法，接着去看下 mapIntoWithKeyPrefixInternal
+ * 看完 mapIntoWithKeyPrefixInternal 可以发现 mapIntoWithKeyPrefixInternal 中做的事情与 forEachChildren 类似
+ * 所以 React.children 的 map 和 forEach 的区别和原生方法一致，都在于有无返回值
  */
 function mapChildren(children, func, context) {
   if (children == null) {
@@ -364,6 +408,10 @@ function countChildren(children) {
  *
  * See https://reactjs.org/docs/react-api.html#reactchildrentoarray
  */
+/**
+ * 与 mapChildren 类似，获得一个展开的数组，没有遍历的 func 调用
+ *
+ */
 function toArray(children) {
   const result = [];
   mapIntoWithKeyPrefixInternal(children, result, null, child => child);
@@ -384,6 +432,9 @@ function toArray(children) {
  * @return {ReactElement} The first and only `ReactElement` contained in the
  * structure.
  */
+/**
+ * 判断是否是单个合法的 ReactElement 节点
+ */
 function onlyChild(children) {
   invariant(
     isValidElement(children),
@@ -392,6 +443,7 @@ function onlyChild(children) {
   return children;
 }
 
+// 对外暴露5个操作 React Children 的方法
 export {
   forEachChildren as forEach,
   mapChildren as map,
