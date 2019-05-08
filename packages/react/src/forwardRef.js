@@ -8,7 +8,9 @@
 import {REACT_FORWARD_REF_TYPE, REACT_MEMO_TYPE} from 'shared/ReactSymbols';
 
 import warningWithoutStack from 'shared/warningWithoutStack';
-
+/**
+ * 将 ref 传到组件上，可以在组件外部拿到到内部的 ref 节点
+ */
 export default function forwardRef<Props, ElementType: React$ElementType>(
   render: (props: Props, ref: React$Ref<ElementType>) => React$Node,
 ) {
@@ -46,6 +48,7 @@ export default function forwardRef<Props, ElementType: React$ElementType>(
     }
   }
 
+  // 返回 REACT_FORWARD_REF_TYPE 类型和 render 方法 
   return {
     $$typeof: REACT_FORWARD_REF_TYPE,
     render,
